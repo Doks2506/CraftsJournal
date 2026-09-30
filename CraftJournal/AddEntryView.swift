@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 struct AddEntryView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
@@ -8,6 +9,8 @@ struct AddEntryView: View {
     @State private var notes = ""
     @State private var image: UIImage?
     @State private var showingCamera = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var artisanName = ""
     
     var body: some View {
         NavigationStack {
@@ -27,18 +30,33 @@ struct AddEntryView: View {
                             .scaledToFit()
                             .frame(maxHeight: 250)
                     }
-                        Button("Take Photo") {
-                            showingCamera = true
-                        }
-                        .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                    Button("Take Photo") {
+                        showingCamera = true
+                    }
+                    .disabled(!UIImagePickerController.isSourceTypeAvailable(.camera))
+                    PhotosPicker(
+                        selection: $selectedPhoto,
+                        matching: .images
+                    ) {
+                        Label("Choose from Library", systemImage: "photo.on.rectangle")
+                    }
                 }
                 
                 TextField("Notes", text: $notes, axis: .vertical)
+                TextField("Artisan Name", text: $artisanName)
             }
             .navigationTitle("New Entry")
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraView(image: $image)
                     .ignoresSafeArea()
+            }
+            .onChange(of: selectedPhoto) { _, newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        image = uiImage
+                    }
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -58,6 +76,7 @@ struct AddEntryView: View {
         entry.craftType = craftType
         entry.date = Date()
         entry.notes = notes
+        entry.artisanName = artisanName
         entry.photo = image?.jpegData(compressionQuality: 0.7)
         do {
             try viewContext.save()
